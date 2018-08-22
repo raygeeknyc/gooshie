@@ -5,5 +5,5 @@ Raspberry Pi, RGB matrix, potentiometer, 2 pushbuttons, Wifi client, speaker
 Set the date (up and down), set the time (potentiometer), confirm the datetime, send it to the cloud service (Ziggy)
 
 ![Gooshie](Gooshie.jpg?raw=true "Gooshie")
-![The Panel](panel.jpg?raw=true "Panel")
+![The Panel](controls.jpg?raw=true "Panel")
 ![Remote](handheld.jpg?raw=true "Remote")
