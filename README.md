@@ -1,4 +1,4 @@
-# gushy
+# Gooshie
 The control panel for our time machine
 Raspberry Pi, RGB matrix, potentiometer, 2 pushbuttons, Wifi client, speaker
 
