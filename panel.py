@@ -6,3 +6,6 @@ from rgbmatrix import Adafruit_RGBmatrix
 import time
 LED_MATRIX_ROWS = 16
 LED_MATRIX_COLS = 32
+
+GPIO.setmode(GPIO.BCM)
+
