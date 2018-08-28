@@ -2,8 +2,13 @@ try:
     import RPi.GPIO as GPIO
 except RuntimeError:
     print('Error importing RPi.GPIO!  This is probably because you need superuser privileges.  You can achieve this by using "sudo" to run your script')
+
 from rgbmatrix import Adafruit_RGBmatrix
-import datetime
+
+import urllib
+import urllib2
+import calendar
+from datetime import datetime, calendar
 
 LED_MATRIX_ROWS = 16
 LED_MATRIX_COLS = 32
@@ -15,13 +20,22 @@ _POT_RANGE = (POT_MAX+1) - POT_MIN
 
 SPEECH_TMP_FILE='/tmp/speech.wav'
 PICO_CMD='pico2wave -l en-US --wave "%s" "%s";aplay "%s"'
+_BASE_URL = 'ziggy.appspot.com/set'
 
-def sendTargetDateToCloud(target, cloud_service):
-  pass
+def getDateAsUTCTimestamp(naive_datetime):
+  " Convert datetime to the unix timestamp, UTC seconds since the epoch. "
+  timestamp_utc = calendar.timegm(naive_datetime.timetuple())
+  epoch_ts = (timestamp_utc - datetime(1970, 1, 1)).total_seconds()
+  return epoch_ts
+
+def sendTargetDateToCloud(target_timestamp, base_url):
+  query_params = urllib.urlencode({'target_timestamp':'{}'.format(target_timestamp)})
+  request = urllib2.urlopen('https://{}/get?{}'.format(base_url, params))
+  response = request.read()
 
 def connectToCloudService():
   " Returns reference to timestore cloud service. "
-  return None
+  return _BASE_URL
 
 def getDateUpwnButton():
   " Returns True if up button is pressed "
@@ -78,7 +92,7 @@ def speakDate(target_date):
     logging.exception('Error speaking')
 
 def main():
-  date_store = connectToCloudService()
+  datetime_service = connectToCloudService()
   target_date = datetime.datetime.now()
 
   while True:
@@ -90,4 +104,4 @@ def main():
     target_date.replace(hour=target_hour, minute=0)
     displayDate(target_date)
     speakDate(target_date)
-    sendTargetDateToCloud(target_date, cloud_service)
+    sendTargetDateToCloud(target_date, datetime_service)
