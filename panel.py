@@ -1,14 +1,22 @@
+import logging
+logging.getLogger('').setLevel(logging.DEBUG)
+import os
+
 try:
     import RPi.GPIO as GPIO
 except RuntimeError:
-    print('Error importing RPi.GPIO!  This is probably because you need superuser privileges.  You can achieve this by using "sudo" to run your script')
+    logging.error('Error importing RPi.GPIO!  This is probably because you need superuser privileges.  You can achieve this by using "sudo" to run your script')
 
-from rgbmatrix import Adafruit_RGBmatrix
+from rgbmatrix import RGBMatrix, RGBMatrixOptions
+from PIL import Image
 
 import urllib
 import urllib2
+
 import calendar
-from datetime import datetime, calendar
+from datetime import datetime
+import calendar
+_EPOCH_BASE = calendar.timegm(datetime(1970, 1, 1).timetuple())
 
 LED_MATRIX_ROWS = 16
 LED_MATRIX_COLS = 32
@@ -20,30 +28,37 @@ _POT_RANGE = (POT_MAX+1) - POT_MIN
 
 SPEECH_TMP_FILE='/tmp/speech.wav'
 PICO_CMD='pico2wave -l en-US --wave "%s" "%s";aplay "%s"'
-_BASE_URL = 'ziggy.appspot.com/set'
+_BASE_URL = 'ziggy-214721.appspot.com/settarget'
 
 def getDateAsUTCTimestamp(naive_datetime):
   " Convert datetime to the unix timestamp, UTC seconds since the epoch. "
   timestamp_utc = calendar.timegm(naive_datetime.timetuple())
-  epoch_ts = (timestamp_utc - datetime(1970, 1, 1)).total_seconds()
-  return epoch_ts
+  unix_ts = (timestamp_utc - _EPOCH_BASE)
+  return unix_ts
 
-def sendTargetDateToCloud(target_timestamp, base_url):
-  query_params = urllib.urlencode({'target_timestamp':'{}'.format(target_timestamp)})
-  request = urllib2.urlopen('https://{}/get?{}'.format(base_url, params))
+def sendTargetDateToCloud(target_datetime, base_url):
+  timestamp = getDateAsUTCTimestamp(target_datetime)
+  query_params = urllib.urlencode({'datetime':'{}'.format(timestamp)})
+  query = 'https://{}?{}'.format(base_url, query_params)
+  logging.debug("sending {}".format(query))
+  request = urllib2.urlopen(query)
   response = request.read()
+  logging.debug("response received: {}".format(response))
 
 def connectToCloudService():
   " Returns reference to timestore cloud service. "
   return _BASE_URL
 
-def getDateUpwnButton():
+def getDateUpButton():
   " Returns True if up button is pressed "
   return False
 
 def getDateDownButton():
   " Returns True if down button is pressed "
   return False 
+
+def getPotentiometerValue():
+  return 127
 
 def getTimeOfDay():
   " Return time of day potentiometer, scaled and truncated to 0:23. "
@@ -87,13 +102,14 @@ def speakDate(target_date):
     daypart = 'P M '
   spoken_datetime = '{} {} on {}, the {}{} of {}'.format(hour, daypart, dow, day, suffix, month)
   try:
-    os.system(PICO_CMD % (SPEECH_TMP_FILE, spoken_date, SPEECH_TMP_FILE))
+    os.system(PICO_CMD % (SPEECH_TMP_FILE, spoken_datetime, SPEECH_TMP_FILE))
   except Exception, e:
     logging.exception('Error speaking')
 
 def main():
   datetime_service = connectToCloudService()
-  target_date = datetime.datetime.now()
+  target_date = datetime.now()
+  previous_target_date = datetime.now()
 
   while True:
     if getDateDownButton():
@@ -102,6 +118,10 @@ def main():
       target_date = scrollDate(target_date, 1)   
     target_hour = getTimeOfDay()
     target_date.replace(hour=target_hour, minute=0)
-    displayDate(target_date)
-    speakDate(target_date)
-    sendTargetDateToCloud(target_date, datetime_service)
+    if target_date != previous_target_date:
+      displayDate(target_date)
+      speakDate(target_date)
+      sendTargetDateToCloud(target_date, datetime_service)
+      previous_target_date = target_date
+
+main()
