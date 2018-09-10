@@ -61,10 +61,10 @@ def getPotentiometerValue():
   return 127
 
 def getTimeOfDay():
-  " Return time of day potentiometer, scaled and truncated to 0:23. "
+  " Return hour of day from the potentiometer, scaled to 0..23. "
   raw = getPotentiometerValue()
   tod = ((raw - POT_MIN)*1.0 / _POT_RANGE) + POT_MIN
-  return int(tod)
+  return int(tod*24)
 
 def scrollDate(target, days_delta):
   """
