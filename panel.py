@@ -17,6 +17,7 @@ import calendar
 from datetime import datetime
 import calendar
 _EPOCH_BASE = calendar.timegm(datetime(1970, 1, 1).timetuple())
+_ZIGGY_BASE_URL = 'ziggy-214721.appspot.com/settarget'
 
 LED_MATRIX_ROWS = 16
 LED_MATRIX_COLS = 32
@@ -28,7 +29,18 @@ _POT_RANGE = (POT_MAX+1) - POT_MIN
 
 SPEECH_TMP_FILE='/tmp/speech.wav'
 PICO_CMD='pico2wave -l en-US --wave "%s" "%s";aplay "%s"'
-_BASE_URL = 'ziggy-214721.appspot.com/settarget'
+
+_display = None
+
+def setupDisplay():
+  options = RGBMatrixOptions()
+  options.hardware_mapping = 'regular'
+  options.rows = 16
+  options.cols = 32
+  options.row_address_type = self.args.led_row_addr_type
+  options.brightness = 100
+  display = RGBMatrix(options = options)
+  return display
 
 def getDateAsUTCTimestamp(naive_datetime):
   " Convert datetime to the unix timestamp, UTC seconds since the epoch. "
@@ -47,7 +59,7 @@ def sendTargetDateToCloud(target_datetime, base_url):
 
 def connectToCloudService():
   " Returns reference to timestore cloud service. "
-  return _BASE_URL
+  return _ZIGGY_BASE_URL
 
 def getDateUpButton():
   " Returns True if up button is pressed "
@@ -76,10 +88,20 @@ def scrollDate(target, days_delta):
   d = target + datetime.timedelta(days=days_delta)
   return d
 
-def displayDate(target_date):
+def showDate(display, target_date):
   " Display the date and time. "
-  print(target_date.strftime('%b, %d %Y\n'))
-  print(target_date.strftime('%H:%M'))
+  offscreen_canvas = display.CreateFrameCanvas()
+  font = graphics.Font()
+  font.LoadFont("../../../fonts/5x7.bdf")  # Was 7x13.bdf in sample
+  textColor = graphics.Color(0, 0, 255)
+  date_str = target_date.strftime('%b, %d %Y\n')
+  print(date_str)
+  len = graphics.DrawText(offscreen_canvas, font, 1, 1, textColor, date_str)
+  textColor = graphics.Color(255, 255, 0)
+  time_str = target_date.strftime('%H:%M')
+  print(time_str)
+  len = graphics.DrawText(offscreen_canvas, font, 1, 1, textColor, time_str)
+  offscreen_canvas = self.matrix.SwapOnVSync(offscreen_canvas)
 
 def speakDate(target_date):
   " Speak the date and time, be well spoken. " 
@@ -100,7 +122,7 @@ def speakDate(target_date):
   elif hour > 12:
     hour -= 12
     daypart = 'P M '
-  spoken_datetime = '{} {} on {}, the {}{} of {}'.format(hour, daypart, dow, day, suffix, month)
+  spoken_datetime = '{}, {} on {}, the {}{} of {}'.format(hour, daypart, dow, day, suffix, month)
   try:
     os.system(PICO_CMD % (SPEECH_TMP_FILE, spoken_datetime, SPEECH_TMP_FILE))
   except Exception, e:
@@ -108,6 +130,7 @@ def speakDate(target_date):
 
 def main():
   datetime_service = connectToCloudService()
+  display = setupDisplay()
   target_date = datetime.now()
   previous_target_date = datetime.now()
 
@@ -119,7 +142,7 @@ def main():
     target_hour = getTimeOfDay()
     target_date.replace(hour=target_hour, minute=0)
     if target_date != previous_target_date:
-      displayDate(target_date)
+      showDate(display, target_date)
       speakDate(target_date)
       sendTargetDateToCloud(target_date, datetime_service)
       previous_target_date = target_date
