@@ -33,6 +33,9 @@ PICO_CMD='/usr/bin/pico2wave -l en-US --wave "%s" "%s";echo "talk";/usr/bin/apla
 
 _display = None
 
+DATE_SET_DELAY_SECS = 1
+DATE_POLL_DELAY_SECS = 0.5
+
 def setupDisplay():
   options = RGBMatrixOptions()
   options.rows = 16
@@ -89,6 +92,16 @@ def scrollDate(target, days_delta):
   d = target + datetime.timedelta(days=days_delta)
   return d
 
+def scrollMonth(target, months_delta):
+  """
+  Args
+    target base date
+    months_delta number of months to increment target date.
+  Returns adjusted date
+  """
+  d = target + datetime.timedelta(months=months_delta)
+  return d
+
 def showDate(display, target_date):
   " Display the date and time. "
   offscreen_canvas = display.CreateFrameCanvas()
@@ -132,24 +145,62 @@ def speakDate(target_date):
   except Exception, e:
     logging.exception('Error speaking')
 
+def processDateChanges(date_queue):
+  logging.info("Starting date processor thread")
+
+  while True:
+    new_date = None
+    try:
+      t = date_queue.get(False)
+      logging.debug("Date queue had an entry")
+      new_date = t
+    except Queue.Empty:
+      if not new_date:
+        logging.debug("Empty date queue, waiting")
+        time.sleep(DATE_POLL_DELAY_SECS)
+        continue
+      logging.debug("New target date: {}".format(new_date))
+      showDate(display, new_date)
+      speakDate(new_date)
+      sendTargetDateToCloud(new__date, datetime_service)
+      new_date = None
+      time.sleep(DATE_SET_DELAY_SECS)
+    except Exception, e:
+      logging.exception("Error processing dates")
+      break
+  logging.warning("Done processing dates")
+
 def main():
   datetime_service = connectToCloudService()
   display = setupDisplay()
   target_date = datetime.now()
   previous_target_date = datetime.now()
+  date_queue = Queue.Queue()
+  try:
+    date_setter = threading.Thread(target = processDateChanges, args=(date_queue))
+    date_setter.start()
+  except Exception, e:
+    logging.exception("Error setting up date processor thread")
+    sys.exit(-1)
 
   while True:
-    if getDateDownButton():
-      target_date = scrollDate(target_date, -1)   
-    elif getDateUpButton():
-      target_date = scrollDate(target_date, 1)   
-    target_hour = getTimeOfDay()
-    target_date = target_date.replace(hour=target_hour, minute=0)
+    if getDateDownButton() and getDateUpButton():
+       slider_position = getTimeOfDay()
+       if slider_position < 12:
+        target_date = scrollMonth(target_date, -1)   
+       else:
+        target_date = scrollMonth(target_date, 1)   
+    else:
+      if getDateDownButton():
+        target_date = scrollDate(target_date, -1)   
+      elif getDateUpButton():
+        target_date = scrollDate(target_date, 1)   
+      target_hour = getTimeOfDay()
+      target_date = target_date.replace(hour=target_hour, minute=0)
     if target_date != previous_target_date:
-      showDate(display, target_date)
-      speakDate(target_date)
-      sendTargetDateToCloud(target_date, datetime_service)
+      date_queue.put(target_date)
       previous_target_date = target_date
+
     time.sleep(1)
 
 main()
