@@ -18,7 +18,11 @@ from PIL import Image
 import urllib
 import urllib2
 
+from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
 import calendar
+_EPOCH_BASE = calendar.timegm(datetime(1970, 1, 1).timetuple())
+_ZIGGY_BASE_URL = 'ziggy-214721.appspot.com/settarget'
 
 POT_A_PIN = 18
 POT_B_PIN = 24
@@ -37,11 +41,6 @@ POT_MIN = 30    # Set this to the observed potentiometer minimum
 POT_MAX = 170    # Set this to the observed potentiometer maximum
 _POT_RANGE = (POT_MAX+1) - POT_MIN
 logging.debug("pot range: {}".format(_POT_RANGE))
-
-from datetime import datetime, timedelta
-import calendar
-_EPOCH_BASE = calendar.timegm(datetime(1970, 1, 1).timetuple())
-_ZIGGY_BASE_URL = 'ziggy-214721.appspot.com/settarget'
 
 LED_MATRIX_ROWS = 16
 LED_MATRIX_COLS = 32
@@ -81,7 +80,7 @@ _display = None
 
 CONTROL_POLL_DELAY_SECS = 0.2
 DATE_SET_DELAY_SECS = 1
-DATE_POLL_DELAY_SECS = 0.1
+DATE_POLL_DELAY_SECS = 0.4
 
 def setupDisplay():
   options = RGBMatrixOptions()
@@ -148,7 +147,8 @@ def scrollMonth(target, months_delta):
     months_delta number of months to increment target date.
   Returns adjusted date
   """
-  d = target + timedelta(months=months_delta)
+  
+  d = target + relativedelta(months=months_delta)
   return d
 
 def showDate(display, target_date):
@@ -158,11 +158,11 @@ def showDate(display, target_date):
   font.LoadFont("fonts/4x6.bdf")  # Was 7x13.bdf in sample
   text_color = graphics.Color(0, 255, 255)
   date_str = target_date.strftime('%m.%d.%y\n')
-  print("Date: {}".format(date_str))
+  logging.info("Date: {}".format(date_str))
   len = graphics.DrawText(offscreen_canvas, font, 1, 7, text_color, date_str)
   text_color = graphics.Color(255, 0, 255)
   time_str = target_date.strftime('%H:%M')
-  print("Time: {}".format(time_str))
+  logging.info("Time: {}".format(time_str))
   len = graphics.DrawText(offscreen_canvas, font, 6, 14, text_color, time_str)
   time.sleep(0.05)
   offscreen_canvas = display.SwapOnVSync(offscreen_canvas)
@@ -187,7 +187,7 @@ def speakDate(target_date):
     hour -= 12
     daypart = 'P. M. '
   spoken_datetime = '{}, {} on {}, the {}{} of {}'.format(hour, daypart, dow, day, suffix, month)
-  print("Saying: {}".format(spoken_datetime))
+  logging.info("Saying: {}".format(spoken_datetime))
   try:
     os.system(PICO_CMD % (SPEECH_TMP_FILE, spoken_datetime, SPEECH_TMP_FILE))
     time.sleep(5)
@@ -198,6 +198,7 @@ def processDateChanges(datetime_service, display, date_queue):
   logging.info("Starting date processor thread")
 
   new_date = None
+  next_target_set = time.now()
   while True:
     try:
       t = date_queue.get(False)
@@ -210,10 +211,12 @@ def processDateChanges(datetime_service, display, date_queue):
         continue
       logging.debug("New target date: {}".format(new_date))
       showDate(display, new_date)
-      speakDate(new_date)
-      sendTargetDateToCloud(new_date, datetime_service)
+      # speakDate(new_date) # RGB Matrix knocks out internal audio output
+      if time.now() > next_target_set:
+        logging.debug("Setting date")
+        sendTargetDateToCloud(new_date, datetime_service)
+        next_target_set = time.now() + relativedelta(seconds=DATE_SET_DELAY_SECS)
       new_date = None
-      time.sleep(DATE_SET_DELAY_SECS)
     except Exception, e:
       logging.exception("Error processing dates")
       break
