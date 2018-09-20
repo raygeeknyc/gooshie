@@ -6,11 +6,17 @@ import Queue
 import sys
 import threading
 
+POT_A_PIN = 18
+POT_B_PIN = 24
+PB1_PIN = 19
+PB2_PIN = 25
 try:
     import RPi.GPIO as GPIO
 except RuntimeError:
     logging.error('Error importing RPi.GPIO!  This is probably because you need superuser privileges.  You can achieve this by using "sudo" to run your script')
 GPIO.setmode(GPIO.BCM)
+GPIO.setup(PB1_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+GPIO.setup(PB2_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
 from rgbmatrix import RGBMatrix, RGBMatrixOptions, graphics
 from PIL import Image
@@ -23,19 +29,6 @@ from dateutil.relativedelta import relativedelta
 import calendar
 _EPOCH_BASE = calendar.timegm(datetime(1970, 1, 1).timetuple())
 _ZIGGY_BASE_URL = 'ziggy-214721.appspot.com/settarget'
-
-POT_A_PIN = 18
-POT_B_PIN = 24
-PB1_PIN = 19
-PB2_PIN = 25
-
-try:
-    import RPi.GPIO as GPIO
-except RuntimeError:
-    logging.error('Error importing RPi.GPIO!  This is probably because you need superuser privileges.  You can achieve this by using "sudo" to run your script')
-
-GPIO.setup(PB1_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-GPIO.setup(PB2_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
 POT_MIN = 30    # Set this to the observed potentiometer minimum
 POT_MAX = 170    # Set this to the observed potentiometer maximum
@@ -200,7 +193,7 @@ def processDateChanges(datetime_service, display, date_queue):
   new_date = None
   last_date_shown = None
   last_date_set = None
-  next_target_set = time.now()
+  next_target_set = datetime.now()
   while True:
     try:
       t = date_queue.get(False)
@@ -209,12 +202,12 @@ def processDateChanges(datetime_service, display, date_queue):
     except Queue.Empty:
       if not new_date:
         logging.debug("Empty date queue")
-        if last_date_set != last_date_shown and time.now() > next_target_set:  # throttle date setting
+        if last_date_set != last_date_shown and datetime.now() > next_target_set:  # throttle date setting
           logging.debug("Setting date")
           # speakDate(last_date) # RGB Matrix knocks out internal audio output
           sendTargetDateToCloud(last_date_shown, datetime_service)
           last_date_set = last_date_shown
-          next_target_set = time.now() + relativedelta(seconds=DATE_SET_DELAY_SECS)
+          next_target_set = datetime.now() + relativedelta(seconds=DATE_SET_DELAY_SECS)
         time.sleep(DATE_POLL_DELAY_SECS)
         continue
       if last_date_shown != new_date:
