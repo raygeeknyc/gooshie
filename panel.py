@@ -38,7 +38,7 @@ POT_MAX = 170    # Set this to the observed potentiometer maximum
 _POT_RANGE = (POT_MAX+1) - POT_MIN
 logging.debug("pot range: {}".format(_POT_RANGE))
 
-from datetime import datetime
+from datetime import datetime, timedelta
 import calendar
 _EPOCH_BASE = calendar.timegm(datetime(1970, 1, 1).timetuple())
 _ZIGGY_BASE_URL = 'ziggy-214721.appspot.com/settarget'
@@ -79,8 +79,9 @@ PICO_CMD='/usr/bin/pico2wave -l en-US --wave "%s" "%s";echo "talk";/usr/bin/apla
 
 _display = None
 
+CONTROL_POLL_DELAY_SECS = 0.2
 DATE_SET_DELAY_SECS = 1
-DATE_POLL_DELAY_SECS = 0.5
+DATE_POLL_DELAY_SECS = 0.1
 
 def setupDisplay():
   options = RGBMatrixOptions()
@@ -120,16 +121,13 @@ def getDateDownButton():
 def getTimeOfDay():
   " Return hour of day from the potentiometer, scaled to 0..23. "
   raw = getPotentiometerValue()
-  print("raw: {}".format(raw))
+  logging.debug("raw: {}".format(raw))
   if raw < POT_MIN:
     raw = POT_MIN
   if raw > POT_MAX:
     raw = POT_MAX
-  print("clipped raw: {}".format(raw))
   tod = raw - POT_MIN
-  print("tod: {}".format(tod))
   portion = (1.0*tod)/_POT_RANGE
-  print("portion: {}".format(portion))
   hour = int(portion*24)
   return hour
 
@@ -140,7 +138,7 @@ def scrollDate(target, days_delta):
     days_delta number of days to increment target date.
   Returns adjusted date
   """
-  d = target + datetime.timedelta(days=days_delta)
+  d = target + timedelta(days=days_delta)
   return d
 
 def scrollMonth(target, months_delta):
@@ -150,7 +148,7 @@ def scrollMonth(target, months_delta):
     months_delta number of months to increment target date.
   Returns adjusted date
   """
-  d = target + datetime.timedelta(months=months_delta)
+  d = target + timedelta(months=months_delta)
   return d
 
 def showDate(display, target_date):
@@ -196,11 +194,11 @@ def speakDate(target_date):
   except Exception, e:
     logging.exception('Error speaking')
 
-def processDateChanges(date_queue):
+def processDateChanges(datetime_service, display, date_queue):
   logging.info("Starting date processor thread")
 
+  new_date = None
   while True:
-    new_date = None
     try:
       t = date_queue.get(False)
       logging.debug("Date queue had an entry")
@@ -213,7 +211,7 @@ def processDateChanges(date_queue):
       logging.debug("New target date: {}".format(new_date))
       showDate(display, new_date)
       speakDate(new_date)
-      sendTargetDateToCloud(new__date, datetime_service)
+      sendTargetDateToCloud(new_date, datetime_service)
       new_date = None
       time.sleep(DATE_SET_DELAY_SECS)
     except Exception, e:
@@ -228,7 +226,7 @@ def main():
   previous_target_date = datetime.now()
   date_queue = Queue.Queue()
   try:
-    date_setter = threading.Thread(target = processDateChanges, args=(date_queue))
+    date_setter = threading.Thread(target = processDateChanges, args=(datetime_service, display, date_queue,))
     date_setter.start()
   except Exception, e:
     logging.exception("Error setting up date processor thread")
@@ -254,6 +252,6 @@ def main():
       date_queue.put(target_date)
       previous_target_date = target_date
 
-    time.sleep(1)
+    time.sleep(CONTROL_POLL_DELAY_SECS)
 
 main()
