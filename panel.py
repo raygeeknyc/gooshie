@@ -2,11 +2,15 @@ import logging
 logging.getLogger('').setLevel(logging.DEBUG)
 import os
 import time
+import Queue
+import sys
+import threading
 
 try:
     import RPi.GPIO as GPIO
 except RuntimeError:
     logging.error('Error importing RPi.GPIO!  This is probably because you need superuser privileges.  You can achieve this by using "sudo" to run your script')
+GPIO.setmode(GPIO.BCM)
 
 from rgbmatrix import RGBMatrix, RGBMatrixOptions, graphics
 from PIL import Image
@@ -15,6 +19,25 @@ import urllib
 import urllib2
 
 import calendar
+
+POT_A_PIN = 18
+POT_B_PIN = 24
+PB1_PIN = 19
+PB2_PIN = 25
+
+try:
+    import RPi.GPIO as GPIO
+except RuntimeError:
+    logging.error('Error importing RPi.GPIO!  This is probably because you need superuser privileges.  You can achieve this by using "sudo" to run your script')
+
+GPIO.setup(PB1_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+GPIO.setup(PB2_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
+POT_MIN = 30    # Set this to the observed potentiometer minimum
+POT_MAX = 170    # Set this to the observed potentiometer maximum
+_POT_RANGE = (POT_MAX+1) - POT_MIN
+logging.debug("pot range: {}".format(_POT_RANGE))
+
 from datetime import datetime
 import calendar
 _EPOCH_BASE = calendar.timegm(datetime(1970, 1, 1).timetuple())
@@ -22,11 +45,34 @@ _ZIGGY_BASE_URL = 'ziggy-214721.appspot.com/settarget'
 
 LED_MATRIX_ROWS = 16
 LED_MATRIX_COLS = 32
-#GPIO.setmode(GPIO.BCM)
 
-POT_MIN = 1    # Set this to the observed potentiometer minimum
-POT_MAX = 26 # Set this to the observed potentiometer maximum
-_POT_RANGE = (POT_MAX+1) - POT_MIN
+def _discharge():
+  GPIO.setup(POT_A_PIN, GPIO.IN)
+  GPIO.setup(POT_B_PIN, GPIO.OUT)
+  GPIO.output(POT_B_PIN, False)
+  time.sleep(0.005)
+
+def _charge_time():
+  GPIO.setup(POT_B_PIN, GPIO.IN)
+  GPIO.setup(POT_A_PIN, GPIO.OUT)
+  count = 0
+  GPIO.output(POT_A_PIN, True)
+  while not GPIO.input(POT_B_PIN):
+    count += 1
+  return count
+ 
+def _analog_read():
+  _discharge()
+  return _charge_time()
+
+def getPotentiometerValue():
+  return _analog_read()
+
+def _getButton1():
+  return not GPIO.input(PB1_PIN) 
+
+def _getButton2():
+  return not GPIO.input(PB2_PIN) 
 
 SPEECH_TMP_FILE='/tmp/speech.wav'
 PICO_CMD='/usr/bin/pico2wave -l en-US --wave "%s" "%s";echo "talk";/usr/bin/aplay "%s"'
@@ -65,21 +111,26 @@ def connectToCloudService():
 
 def getDateUpButton():
   " Returns True if up button is pressed "
-  return False
+  return _getButton1()
 
 def getDateDownButton():
   " Returns True if down button is pressed "
-  return False 
-
-def getPotentiometerValue():
-  return POT_MIN/2+1
+  return _getButton2()
 
 def getTimeOfDay():
   " Return hour of day from the potentiometer, scaled to 0..23. "
   raw = getPotentiometerValue()
+  print("raw: {}".format(raw))
+  if raw < POT_MIN:
+    raw = POT_MIN
+  if raw > POT_MAX:
+    raw = POT_MAX
+  print("clipped raw: {}".format(raw))
   tod = raw - POT_MIN
-  portion = (1.0*raw)/_POT_RANGE
-  hour = int(portion*23)
+  print("tod: {}".format(tod))
+  portion = (1.0*tod)/_POT_RANGE
+  print("portion: {}".format(portion))
+  hour = int(portion*24)
   return hour
 
 def scrollDate(target, days_delta):
@@ -171,8 +222,8 @@ def processDateChanges(date_queue):
   logging.warning("Done processing dates")
 
 def main():
-  datetime_service = connectToCloudService()
   display = setupDisplay()
+  datetime_service = connectToCloudService()
   target_date = datetime.now()
   previous_target_date = datetime.now()
   date_queue = Queue.Queue()
@@ -186,6 +237,7 @@ def main():
   while True:
     if getDateDownButton() and getDateUpButton():
        slider_position = getTimeOfDay()
+       logging.debug("slider: {}".format(slider_position))
        if slider_position < 12:
         target_date = scrollMonth(target_date, -1)   
        else:
@@ -196,6 +248,7 @@ def main():
       elif getDateUpButton():
         target_date = scrollDate(target_date, 1)   
       target_hour = getTimeOfDay()
+      logging.debug("target_hour: {}".format(target_hour))
       target_date = target_date.replace(hour=target_hour, minute=0)
     if target_date != previous_target_date:
       date_queue.put(target_date)

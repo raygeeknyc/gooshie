@@ -4,7 +4,9 @@ import os
 import time
 
 a_pin = 18
-b_pin = 23
+b_pin = 24
+PB1_PIN = 19
+PB2_PIN = 25
 
 try:
     import RPi.GPIO as GPIO
@@ -12,6 +14,9 @@ except RuntimeError:
     logging.error('Error importing RPi.GPIO!  This is probably because you need superuser privileges.  You can achieve this by using "sudo" to run your script')
 
 GPIO.setmode(GPIO.BCM)
+
+GPIO.setup(PB1_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+GPIO.setup(PB2_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
 POT_MIN = 0    # Set this to the observed potentiometer minimum
 POT_MAX = 1024 # Set this to the observed potentiometer maximum
@@ -39,10 +44,18 @@ def _analog_read():
 def getPotentiometerValue():
   return _analog_read()
 
+def getButton1():
+  return GPIO.input(PB1_PIN) 
+
+def getButton2():
+  return GPIO.input(PB2_PIN) 
+
 def main():
   while True:
     target_hour = getPotentiometerValue()
     print "Pot: {}".format(target_hour)
+    print "Button 1: {}".format(getButton1())
+    print "Button 2: {}".format(getButton2())
     time.sleep(1)
 
 main()
