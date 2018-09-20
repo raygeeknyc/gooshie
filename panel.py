@@ -198,7 +198,8 @@ def processDateChanges(datetime_service, display, date_queue):
   logging.info("Starting date processor thread")
 
   new_date = None
-  last_date = None
+  last_date_shown = None
+  last_date_set = None
   next_target_set = time.now()
   while True:
     try:
@@ -208,17 +209,19 @@ def processDateChanges(datetime_service, display, date_queue):
     except Queue.Empty:
       if not new_date:
         logging.debug("Empty date queue")
-        if last_date != new_date and time.now() > next_target_set:
-          logging.debug("Setting last date")
+        if last_date_set != last_date_shown and time.now() > next_target_set:  # throttle date setting
+          logging.debug("Setting date")
           # speakDate(last_date) # RGB Matrix knocks out internal audio output
-          sendTargetDateToCloud(last_date, datetime_service)
+          sendTargetDateToCloud(last_date_shown, datetime_service)
+          last_date_set = last_date_shown
           next_target_set = time.now() + relativedelta(seconds=DATE_SET_DELAY_SECS)
         time.sleep(DATE_POLL_DELAY_SECS)
         continue
-      logging.debug("New target date: {}".format(new_date))
-      showDate(display, new_date)
-      last_date = new_date
-      new_date = None
+      if last_date_shown != new_date:
+        logging.debug("New target date: {}".format(new_date))
+        showDate(display, new_date)
+        last_date_shown = new_date
+        new_date = None
     except Exception, e:
       logging.exception("Error processing dates")
       break
