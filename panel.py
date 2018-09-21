@@ -31,7 +31,7 @@ _EPOCH_BASE = calendar.timegm(datetime(1970, 1, 1).timetuple())
 _ZIGGY_BASE_URL = 'ziggy-214721.appspot.com/settarget'
 
 POT_MIN = 30    # Set this to the observed potentiometer minimum
-POT_MAX = 160    # Set this to the observed potentiometer maximum
+POT_MAX = 150    # Set this to the observed potentiometer maximum
 _POT_RANGE = (POT_MAX+1) - POT_MIN
 logging.debug("pot range: {}".format(_POT_RANGE))
 
