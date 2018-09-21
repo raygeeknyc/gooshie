@@ -31,7 +31,7 @@ _EPOCH_BASE = calendar.timegm(datetime(1970, 1, 1).timetuple())
 _ZIGGY_BASE_URL = 'ziggy-214721.appspot.com/settarget'
 
 POT_MIN = 30    # Set this to the observed potentiometer minimum
-POT_MAX = 170    # Set this to the observed potentiometer maximum
+POT_MAX = 160    # Set this to the observed potentiometer maximum
 _POT_RANGE = (POT_MAX+1) - POT_MIN
 logging.debug("pot range: {}".format(_POT_RANGE))
 
@@ -90,13 +90,17 @@ def getDateAsUTCTimestamp(naive_datetime):
   return unix_ts
 
 def sendTargetDateToCloud(target_datetime, base_url):
-  timestamp = getDateAsUTCTimestamp(target_datetime)
-  query_params = urllib.urlencode({'datetime':'{}'.format(timestamp)})
-  query = 'https://{}?{}'.format(base_url, query_params)
-  logging.debug("sending {}".format(query))
-  request = urllib2.urlopen(query)
-  response = request.read()
-  logging.debug("response received: {}".format(response))
+  try:
+    timestamp = getDateAsUTCTimestamp(target_datetime)
+    query_params = urllib.urlencode({'datetime':'{}'.format(timestamp)})
+    query = 'https://{}?{}'.format(base_url, query_params)
+    logging.debug("sending {}".format(query))
+    request = urllib2.urlopen(query)
+    response = request.read()
+    logging.debug("response received: {}".format(response))
+  except Exception, e:
+    logging.exception("Error sending to cloud")
+    return
 
 def connectToCloudService():
   " Returns reference to timestore cloud service. "
@@ -222,7 +226,13 @@ def processDateChanges(datetime_service, display, date_queue):
 
 def main():
   display = setupDisplay()
-  datetime_service = connectToCloudService()
+  while True:
+    try:
+      datetime_service = connectToCloudService()
+      break
+    except Exception, e:
+      logging.exception("Error connecting, retrying")
+      continue
   target_date = datetime.now()
   previous_target_date = datetime.now()
   date_queue = Queue.Queue()
