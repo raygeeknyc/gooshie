@@ -10,6 +10,10 @@ POT_A_PIN = 18
 POT_B_PIN = 24
 PB1_PIN = 19
 PB2_PIN = 25
+_POT_DRIFT = 5
+global pot_value
+pot_value = 0
+
 try:
     import RPi.GPIO as GPIO
 except RuntimeError:
@@ -116,13 +120,18 @@ def getDateDownButton():
 
 def getTimeOfDay():
   " Return hour of day from the potentiometer, scaled to 0..23. "
+  global pot_value
+
   raw = getPotentiometerValue()
   logging.debug("raw: {}".format(raw))
-  if raw < POT_MIN:
-    raw = POT_MIN
-  if raw > POT_MAX:
-    raw = POT_MAX
-  tod = raw - POT_MIN
+  if abs(pot_value - raw) > _POT_DRIFT:
+    pot_value = raw
+    logging.debug("pot: {}".format(pot_value))
+  if pot_value < POT_MIN:
+    pot_value = POT_MIN
+  if pot_value > POT_MAX:
+    pot_value = POT_MAX
+  tod = pot_value - POT_MIN
   portion = (1.0*tod)/_POT_RANGE
   hour = int(portion*24)
   return hour
